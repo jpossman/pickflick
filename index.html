@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PickFlick: find something to watch tonight</title>
+<meta name="description" content="Narrow thousands of movies and shows down to the one you'll actually watch tonight.">
+<meta name="theme-color" content="#0e0e12">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
+<style>
+  :root {
+    --bg: #0e0e12;
+    --surface: #18181f;
+    --surface-2: #22222b;
+    --line: #2e2e39;
+    --text: #f3f1ec;
+    --muted: #a3a1ad;
+    --accent: #ffb547;
+    --accent-ink: #1b1305;
+    --keep: #4ade80;
+    --pass: #f87171;
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  #app { max-width: 720px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; padding: 0 16px; }
+
+  /* Header */
+  .top { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; padding: 14px 0 10px; }
+  .brand { text-align: center; font-weight: 800; font-size: 20px; letter-spacing: -0.02em; cursor: pointer; }
+  .brand span { color: var(--accent); }
+  .icon-btn { width: 40px; height: 40px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: 18px; display: grid; place-items: center; }
+  .icon-btn[hidden] { visibility: hidden; display: grid; }
+  .progress { height: 4px; background: var(--surface-2); border-radius: 99px; overflow: hidden; }
+  .progress > div { height: 100%; width: 0; background: var(--accent); transition: width .35s ease; }
+
+  main { flex: 1; padding: 22px 0 28px; }
+  h1 { font-size: clamp(26px, 6vw, 34px); line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 8px; }
+  .sub { color: var(--muted); margin: 0 0 22px; }
+  .eyebrow { text-transform: uppercase; letter-spacing: .12em; font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
+
+  /* Type choice */
+  .type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .type-card { text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 18px; transition: border-color .15s, transform .15s; }
+  .type-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .type-card .emoji { font-size: 34px; }
+  .type-card strong { display: block; font-size: 20px; margin-top: 10px; }
+  .type-card small { color: var(--muted); }
+
+  /* Chips */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 9px 15px; font-size: 15px; transition: all .12s; }
+  .chip:hover { border-color: #4a4a58; }
+  .chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 650; }
+  .group { margin-bottom: 22px; }
+  .group-label { font-weight: 700; margin-bottom: 10px; font-size: 15px; }
+  .hint { color: var(--muted); font-size: 14px; margin-top: 10px; }
+
+  /* Buttons */
+  .actions { position: sticky; bottom: 0; padding: 14px 0 calc(14px + env(safe-area-inset-bottom)); background: linear-gradient(to top, var(--bg) 70%, transparent); display: flex; gap: 10px; margin-top: 10px; }
+  .btn { flex: 1; border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 14px 18px; font-weight: 700; font-size: 16px; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.ghost { background: transparent; }
+  .actions.static { position: static; background: none; }
+
+  /* Swipe deck */
+  .deck-meta { display: flex; justify-content: space-between; color: var(--muted); font-size: 14px; margin-bottom: 12px; }
+  .deck-meta b { color: var(--text); }
+  .swipe-card { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; overflow: hidden; display: grid; grid-template-columns: 42% 1fr; min-height: 300px; touch-action: pan-y; user-select: none; transition: transform .25s ease, opacity .25s ease; }
+  .swipe-card.dragging { transition: none; }
+  .swipe-card img.poster { width: 100%; height: 100%; object-fit: cover; display: block; background: var(--surface-2); }
+  .swipe-card .info { padding: 18px; display: flex; flex-direction: column; gap: 8px; }
+  .swipe-card h2 { margin: 0; font-size: 22px; line-height: 1.15; }
+  .meta-row { display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; color: var(--muted); }
+  .pill { background: var(--surface-2); border-radius: 999px; padding: 3px 9px; }
+  .pill.star { color: var(--accent); }
+  .overview { color: #d7d5df; font-size: 15px; margin: 4px 0 0; display: -webkit-box; -webkit-line-clamp: 7; -webkit-box-orient: vertical; overflow: hidden; }
+  .stamp { position: absolute; top: 18px; padding: 6px 12px; border: 3px solid; border-radius: 10px; font-weight: 900; font-size: 22px; letter-spacing: .06em; opacity: 0; pointer-events: none; }
+  .stamp.keep { left: 18px; color: var(--keep); transform: rotate(-12deg); }
+  .stamp.pass { right: 18px; color: var(--pass); transform: rotate(12deg); }
+  .decide { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+  .decide .btn { padding: 16px; font-size: 17px; }
+  .btn.pass { color: var(--pass); }
+  .btn.keep { background: #173a25; color: var(--keep); border-color: #235a38; }
+  .kept-strip { display: flex; gap: 6px; margin-top: 16px; overflow-x: auto; padding-bottom: 4px; }
+  .kept-strip img { width: 44px; height: 66px; object-fit: cover; border-radius: 6px; flex: none; border: 1px solid var(--line); }
+  .kbd-hint { color: var(--muted); font-size: 13px; text-align: center; margin-top: 10px; }
+
+  /* Duel */
+  .duel { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .duel-card { text-align: left; background: var(--surface); border: 2px solid var(--line); border-radius: 18px; overflow: hidden; padding: 0; transition: border-color .15s, transform .15s; }
+  .duel-card:hover { border-color: var(--accent); transform: translateY(-3px); }
+  .duel-card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; background: var(--surface-2); }
+  .duel-card .d-info { padding: 12px; }
+  .duel-card strong { display: block; font-size: 16px; line-height: 1.2; }
+  .duel-card small { color: var(--muted); }
+  .vs { text-align: center; color: var(--muted); font-weight: 800; margin: 4px 0 14px; }
+
+  /* Winner */
+  .hero { position: relative; border-radius: 20px; overflow: hidden; background: var(--surface); border: 1px solid var(--line); }
+  .hero .backdrop { width: 100%; aspect-ratio: 16/8; object-fit: cover; display: block; opacity: .55; background: var(--surface-2); }
+  .hero .hero-body { display: grid; grid-template-columns: 120px 1fr; gap: 16px; padding: 0 18px 18px; margin-top: -70px; position: relative; }
+  .hero .hero-body img { width: 120px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.5); background: var(--surface-2); }
+  .hero h1 { margin-top: 74px; font-size: clamp(24px, 5vw, 30px); }
+  .tagline { font-style: italic; color: var(--muted); margin: 0 0 6px; }
+  .section { margin-top: 20px; }
+  .section h3 { margin: 0 0 10px; font-size: 15px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .providers { display: flex; flex-wrap: wrap; gap: 10px; }
+  .provider { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 6px 12px 6px 6px; font-size: 14px; }
+  .provider img { width: 32px; height: 32px; border-radius: 8px; }
+  .fine { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  a { color: var(--accent); }
+
+  /* States */
+  .center { text-align: center; padding: 50px 10px; }
+  .spinner { width: 42px; height: 42px; border-radius: 50%; border: 4px solid var(--surface-2); border-top-color: var(--accent); animation: spin .8s linear infinite; margin: 0 auto 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error { background: #2a1416; border: 1px solid #5c2227; color: #ffc9c9; border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
+  .summary { color: var(--muted); font-size: 14px; margin: -10px 0 18px; }
+
+  footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; padding: 16px 0 24px; display: flex; align-items: center; gap: 10px; }
+  footer svg { flex: none; }
+
+  @media (max-width: 480px) {
+    .swipe-card { grid-template-columns: 1fr; }
+    .swipe-card img.poster { aspect-ratio: 2/3; max-height: 52vh; object-fit: cover; }
+    .overview { -webkit-line-clamp: 4; }
+    .hero .hero-body { grid-template-columns: 90px 1fr; }
+    .hero .hero-body img { width: 90px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <button id="backBtn" class="icon-btn" aria-label="Go back" hidden>←</button>
+    <div class="brand" id="brand" title="Start over">Pick<span>Flick</span></div>
+    <div></div>
+  </header>
+  <div class="progress" aria-hidden="true"><div id="progressBar"></div></div>
+  <main id="view" aria-live="polite"></main>
+  <footer>
+    <svg width="56" height="24" viewBox="0 0 56 24" aria-label="TMDB"><rect width="56" height="24" rx="6" fill="#0d253f"/><text x="28" y="16.5" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700" font-size="12" fill="#90cea1">TMDB</text></svg>
+    <span>This product uses the TMDB API but is not endorsed or certified by TMDB.</span>
+  </footer>
+</div>
+
+<script>
+(() => {
+  // ---------- Reference data ----------
+  const GENRES = {
+    movie: [
+      [28, 'Action'], [12, 'Adventure'], [16, 'Animation'], [35, 'Comedy'], [80, 'Crime'],
+      [99, 'Documentary'], [18, 'Drama'], [10751, 'Family'], [14, 'Fantasy'], [36, 'History'],
+      [27, 'Horror'], [10402, 'Music'], [9648, 'Mystery'], [10749, 'Romance'], [878, 'Sci-Fi'],
+      [53, 'Thriller'], [10752, 'War'], [37, 'Western'],
+    ],
+    tv: [
+      [10759, 'Action & Adventure'], [16, 'Animation'], [35, 'Comedy'], [80, 'Crime'],
+      [99, 'Documentary'], [18, 'Drama'], [10751, 'Family'], [10762, 'Kids'], [9648, 'Mystery'],
+      [10764, 'Reality'], [10765, 'Sci-Fi & Fantasy'], [10768, 'War & Politics'], [37, 'Western'],
+    ],
+  };
+  const THIS_YEAR = new Date().getFullYear();
+  const ERAS = [
+    { id: 'any', label: 'Any time' },
+    { id: 'new', label: 'Brand new', from: THIS_YEAR - 1 },
+    { id: '2020s', label: '2020s', from: 2020, to: 2029 },
+    { id: '2010s', label: '2010s', from: 2010, to: 2019 },
+    { id: '2000s', label: '2000s', from: 2000, to: 2009 },
+    { id: '90s', label: '90s', from: 1990, to: 1999 },
+    { id: 'classic', label: 'Classics (pre-1990)', to: 1989 },
+  ];
+  const LENGTHS = {
+    movie: [
+      { id: 'any', label: 'Any length' },
+      { id: 'short', label: 'Under 1h 40m', lte: 100 },
+      { id: 'mid', label: '1h 40m – 2h 10m', gte: 100, lte: 130 },
+      { id: 'long', label: 'Epic (2h 10m+)', gte: 130 },
+    ],
+    tv: [
+      { id: 'any', label: 'Any length' },
+      { id: 'short', label: 'Quick episodes (≤30 min)', lte: 30 },
+      { id: 'mid', label: '30–60 min', gte: 30, lte: 60 },
+      { id: 'long', label: 'Hour-plus', gte: 60 },
+    ],
+  };
+  const LANGS = [
+    ['', 'Any language'], ['en', 'English'], ['ja', 'Japanese'], ['ko', 'Korean'], ['es', 'Spanish'],
+    ['fr', 'French'], ['hi', 'Hindi'], ['zh', 'Chinese'], ['de', 'German'], ['it', 'Italian'],
+  ];
+  const RATINGS = [[0, 'Any rating'], [6, '6+ ★'], [7, '7+ ★'], [8, '8+ ★']];
+
+  const IMG = 'https://image.tmdb.org/t/p/';
+  const DECK_SIZE = 20;
+  const REGION = (() => {
+    const m = (navigator.language || '').match(/-([A-Z]{2})$/i);
+    return m ? m[1].toUpperCase() : 'US';
+  })();
+
+  // ---------- State ----------
+  const fresh = () => ({
+    step: 'type', type: null, genres: new Set(), era: 'any', length: 'any', lang: '', rating: 0,
+    pool: [], seen: new Set(), nextPage: 1, totalPages: 1,
+    deck: [], idx: 0, kept: [], passed: 0,
+    duel: null, winner: null, error: null,
+  });
+  let S = fresh();
+
+  const STEPS = ['type', 'genres', 'filters', 'swipe', 'duel', 'winner'];
+  const view = document.getElementById('view');
+  const backBtn = document.getElementById('backBtn');
+  const bar = document.getElementById('progressBar');
+
+  // ---------- Helpers ----------
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const genreName = (id) => (GENRES[S.type] || []).concat(GENRES.movie, GENRES.tv).find((g) => g[0] === id)?.[1];
+  const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const posterUrl = (p, size = 'w342') => p ? IMG + size + p : '';
+  const fmtRuntime = (m) => m ? (m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`) : '';
+
+  async function tmdb(path, params = {}) {
+    const q = new URLSearchParams({ path, ...params });
+    const r = await fetch('/api/tmdb?' + q.toString());
+    let data;
+    try { data = await r.json(); } catch { throw new Error('The server sent an unexpected response. Is the /api folder deployed?'); }
+    if (!r.ok) throw new Error(data.error || data.status_message || `Request failed (${r.status}).`);
+    return data;
+  }
+
+  function normalize(r) {
+    return {
+      id: r.id,
+      type: S.type,
+      title: r.title || r.name || 'Untitled',
+      year: (r.release_date || r.first_air_date || '').slice(0, 4),
+      rating: typeof r.vote_average === 'number' ? r.vote_average : null,
+      overview: r.overview || 'No description available.',
+      poster: r.poster_path,
+      backdrop: r.backdrop_path,
+      genreIds: r.genre_ids || [],
+    };
+  }
+
+  function discoverParams(page) {
+    const p = { sort_by: 'popularity.desc', language: 'en-US', page: String(page) };
+    p['vote_count.gte'] = S.lang && S.lang !== 'en' ? '40' : (S.type === 'movie' ? '150' : '80');
+    if (S.genres.size) p.with_genres = [...S.genres].join('|'); // "|" = any of the picked genres
+    if (S.lang) p.with_original_language = S.lang;
+    const era = ERAS.find((e) => e.id === S.era);
+    const dk = S.type === 'movie' ? 'primary_release_date' : 'first_air_date';
+    if (era.from) p[dk + '.gte'] = `${era.from}-01-01`;
+    if (era.to) p[dk + '.lte'] = `${era.to}-12-31`;
+    else if (era.from) p[dk + '.lte'] = new Date().toISOString().slice(0, 10);
+    const len = LENGTHS[S.type].find((l) => l.id === S.length);
+    if (len.gte) p['with_runtime.gte'] = String(len.gte);
+    if (len.lte) p['with_runtime.lte'] = String(len.lte);
+    if (S.rating) p['vote_average.gte'] = String(S.rating);
+    return p;
+  }
+
+  // Pull pages from TMDB until the pool has enough fresh titles for a deck.
+  async function fillPool(min) {
+    let guard = 0;
+    while (S.pool.length < min && S.nextPage <= S.totalPages && guard < 4) {
+      const pages = [S.nextPage, S.nextPage + 1, S.nextPage + 2].filter((p) => p <= Math.min(S.totalPages, 500));
+      S.nextPage += 3;
+      guard++;
+      const results = await Promise.all(pages.map((p) => tmdb('/discover/' + S.type, discoverParams(p))));
+      results.forEach((d) => { S.totalPages = Math.min(d.total_pages || 1, 500); });
+      const fresh = results.flatMap((d) => d.results || [])
+        .filter((r) => r.poster_path && !S.seen.has(r.id))
+        .map(normalize);
+      fresh.forEach((m) => S.seen.add(m.id));
+      S.pool.push(...shuffle(fresh));
+    }
+  }
+
+  async function dealDeck() {
+    S.error = null;
+    render({ loading: 'Finding picks for you…' });
+    try {
+      await fillPool(DECK_SIZE);
+      S.deck = S.pool.splice(0, DECK_SIZE);
+      S.idx = 0;
+      go('swipe');
+    } catch (e) {
+      S.error = e.message;
+      go('filters');
+    }
+  }
+
+  function go(step) { S.step = step; render(); window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' }); }
+
+  // ---------- Screens ----------
+  function screenType() {
+    return `
+      <div class="eyebrow">Step 1</div>
+      <h1>What are we watching tonight?</h1>
+      <p class="sub">Answer a few quick questions, sort through a stack of picks, and land on one.</p>
+      <div class="type-grid">
+        <button class="type-card" data-type="movie"><div class="emoji">🎬</div><strong>A movie</strong><small>One sitting, done tonight</small></button>
+        <button class="type-card" data-type="tv"><div class="emoji">📺</div><strong>A show</strong><small>Something to get into</small></button>
+      </div>`;
+  }
+
+  function screenGenres() {
+    const list = GENRES[S.type];
+    return `
+      <div class="eyebrow">Step 2</div>
+      <h1>Pick any genres you're in the mood for</h1>
+      <p class="sub">Choose as many as you like. We'll show titles that match any of them.</p>
+      <div class="chips">
+        ${list.map(([id, name]) => `<button class="chip" data-genre="${id}" aria-pressed="${S.genres.has(id)}">${esc(name)}</button>`).join('')}
+      </div>
+      <p class="hint">${S.genres.size ? `${S.genres.size} selected` : 'Skip this to see everything.'}</p>
+      <div class="actions">
+        <button class="btn primary" data-next="filters">${S.genres.size ? 'Next' : 'Skip: any genre'}</button>
+      </div>`;
+  }
+
+  function chipGroup(label, key, options) {
+    return `
+      <div class="group">
+        <div class="group-label">${esc(label)}</div>
+        <div class="chips">
+          ${options.map(([val, text]) => `<button class="chip" data-set="${key}" data-val="${esc(val)}" aria-pressed="${String(S[key]) === String(val)}">${esc(text)}</button>`).join('')}
+        </div>
+      </div>`;
+  }
+
+  function screenFilters() {
+    return `
+      <div class="eyebrow">Step 3</div>
+      <h1>Narrow it down</h1>
+      <p class="sub">All optional. Leave anything on “Any”.</p>
+      ${S.error ? `<div class="error">${esc(S.error)}</div>` : ''}
+      ${chipGroup('When was it made?', 'era', ERAS.map((e) => [e.id, e.label]))}
+      ${chipGroup(S.type === 'movie' ? 'How much time do you have?' : 'Episode length', 'length', LENGTHS[S.type].map((l) => [l.id, l.label]))}
+      ${chipGroup('Original language', 'lang', LANGS)}
+      ${chipGroup('Minimum rating', 'rating', RATINGS)}
+      <div class="actions">
+        <button class="btn primary" data-action="deal">Show me picks</button>
+      </div>`;
+  }
+
+  function filterSummary() {
+    const parts = [S.type === 'movie' ? 'Movies' : 'Shows'];
+    if (S.genres.size) parts.push([...S.genres].map(genreName).join(' / '));
+    if (S.era !== 'any') parts.push(ERAS.find((e) => e.id === S.era).label);
+    if (S.length !== 'any') parts.push(LENGTHS[S.type].find((l) => l.id === S.length).label);
+    if (S.lang) parts.push(LANGS.find((l) => l[0] === S.lang)[1]);
+    if (S.rating) parts.push(`${S.rating}+ ★`);
+    return parts.join(' · ');
+  }
+
+  function screenSwipe() {
+    if (!S.deck.length) {
+      return `
+        <div class="center">
+          <h1>No matches</h1>
+          <p class="sub">Nothing fits all of those filters. Try loosening one or two.</p>
+        </div>
+        <div class="actions"><button class="btn primary" data-next="filters">Change filters</button></div>`;
+    }
+    if (S.idx >= S.deck.length) return screenDeckDone();
+    const m = S.deck[S.idx];
+    const genres = m.genreIds.map(genreName).filter(Boolean).slice(0, 3);
+    return `
+      <p class="summary">${esc(filterSummary())}</p>
+      <div class="deck-meta"><span>Card <b>${S.idx + 1}</b> of ${S.deck.length}</span><span><b>${S.kept.length}</b> kept</span></div>
+      <article class="swipe-card" id="card">
+        <img class="poster" src="${posterUrl(m.poster, 'w500')}" alt="Poster for ${esc(m.title)}" draggable="false">
+        <div class="info">
+          <h2>${esc(m.title)}</h2>
+          <div class="meta-row">
+            ${m.year ? `<span class="pill">${esc(m.year)}</span>` : ''}
+            ${m.rating ? `<span class="pill star">★ ${m.rating.toFixed(1)}</span>` : ''}
+            ${genres.map((g) => `<span class="pill">${esc(g)}</span>`).join('')}
+          </div>
+          <p class="overview">${esc(m.overview)}</p>
+        </div>
+        <div class="stamp keep" id="stampKeep">KEEP</div>
+        <div class="stamp pass" id="stampPass">PASS</div>
+      </article>
+      <div class="decide">
+        <button class="btn pass" data-action="pass">✕ Pass</button>
+        <button class="btn keep" data-action="keep">✓ Keep</button>
+      </div>
+      ${S.kept.length ? `<div class="kept-strip">${S.kept.map((k) => `<img src="${posterUrl(k.poster, 'w92')}" alt="${esc(k.title)}" title="${esc(k.title)}">`).join('')}</div>` : ''}
+      <p class="kbd-hint">Swipe the card, or use ← and → keys</p>
+      ${S.kept.length >= 2 ? `<div class="actions"><button class="btn primary" data-action="narrow">Stop here: narrow my ${S.kept.length} picks</button></div>` : ''}`;
+  }
+
+  function screenDeckDone() {
+    if (S.kept.length === 0) {
+      return `
+        <div class="center">
+          <h1>Nothing grabbed you?</h1>
+          <p class="sub">No problem. Deal a fresh stack, or tweak your filters.</p>
+        </div>
+        <div class="actions">
+          <button class="btn" data-next="filters">Change filters</button>
+          <button class="btn primary" data-action="more">Deal 20 more</button>
+        </div>`;
+    }
+    return `
+      <div class="center">
+        <h1>You kept ${S.kept.length}</h1>
+        <p class="sub">Now let's settle it, two at a time.</p>
+      </div>
+      <div class="actions">
+        <button class="btn" data-action="more">Keep browsing</button>
+        <button class="btn primary" data-action="narrow">Narrow it down</button>
+      </div>`;
+  }
+
+  function startDuel() {
+    if (S.kept.length === 1) return pickWinner(S.kept[0]);
+    const order = shuffle([...S.kept]);
+    S.duel = { champ: order[0], queue: order.slice(1), round: 1, total: order.length - 1 };
+    go('duel');
+  }
+
+  function duelCard(m, side) {
+    return `
+      <button class="duel-card" data-pick="${side}">
+        <img src="${posterUrl(m.poster)}" alt="">
+        <div class="d-info"><strong>${esc(m.title)}</strong><small>${esc(m.year)}${m.rating ? ` · ★ ${m.rating.toFixed(1)}` : ''}</small></div>
+      </button>`;
+  }
+
+  function screenDuel() {
+    const d = S.duel;
+    const challenger = d.queue[0];
+    return `
+      <div class="eyebrow">Round ${d.round} of ${d.total}</div>
+      <h1>Which one, tonight?</h1>
+      <p class="sub">Tap the one you'd rather watch. The winner stays on.</p>
+      <div class="duel">${duelCard(d.champ, 'champ')}${duelCard(challenger, 'challenger')}</div>`;
+  }
+
+  async function pickWinner(m) {
+    S.winner = { base: m, details: null, providers: null };
+    render({ loading: 'Getting the details…' });
+    const [details, providers] = await Promise.allSettled([
+      tmdb(`/${m.type}/${m.id}`, { language: 'en-US' }),
+      tmdb(`/${m.type}/${m.id}/watch/providers`),
+    ]);
+    if (details.status === 'fulfilled') S.winner.details = details.value;
+    if (providers.status === 'fulfilled') {
+      const res = providers.value.results || {};
+      S.winner.providers = res[REGION] ? { region: REGION, ...res[REGION] } : (res.US ? { region: 'US', ...res.US } : null);
+    }
+    go('winner');
+  }
+
+  function providerRow(label, list) {
+    if (!list || !list.length) return '';
+    return `
+      <div class="group">
+        <div class="group-label">${label}</div>
+        <div class="providers">
+          ${list.slice(0, 8).map((p) => `<span class="provider"><img src="${posterUrl(p.logo_path, 'w92')}" alt="">${esc(p.provider_name)}</span>`).join('')}
+        </div>
+      </div>`;
+  }
+
+  function screenWinner() {
+    const { base: m, details: d, providers: pv } = S.winner;
+    const runtime = d ? (d.runtime ? fmtRuntime(d.runtime) : (d.episode_run_time && d.episode_run_time[0] ? fmtRuntime(d.episode_run_time[0]) + ' episodes' : '')) : '';
+    const seasons = d && d.number_of_seasons ? `${d.number_of_seasons} season${d.number_of_seasons > 1 ? 's' : ''}` : '';
+    const genres = d && d.genres ? d.genres.map((g) => g.name) : m.genreIds.map(genreName).filter(Boolean);
+    const hasProviders = pv && (pv.flatrate || pv.free || pv.ads || pv.rent || pv.buy);
+    return `
+      <div class="eyebrow">Tonight's pick</div>
+      <div class="hero">
+        ${m.backdrop ? `<img class="backdrop" src="${posterUrl(m.backdrop, 'w780')}" alt="">` : '<div class="backdrop"></div>'}
+        <div class="hero-body">
+          <img src="${posterUrl(m.poster)}" alt="Poster for ${esc(m.title)}">
+          <div>
+            <h1>${esc(m.title)}</h1>
+            ${d && d.tagline ? `<p class="tagline">${esc(d.tagline)}</p>` : ''}
+            <div class="meta-row">
+              ${m.year ? `<span class="pill">${esc(m.year)}</span>` : ''}
+              ${runtime ? `<span class="pill">${esc(runtime)}</span>` : ''}
+              ${seasons ? `<span class="pill">${esc(seasons)}</span>` : ''}
+              ${m.rating ? `<span class="pill star">★ ${m.rating.toFixed(1)}</span>` : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        ${genres.length ? `<div class="meta-row" style="margin-bottom:10px">${genres.map((g) => `<span class="pill">${esc(g)}</span>`).join('')}</div>` : ''}
+        <p>${esc((d && d.overview) || m.overview)}</p>
+      </div>
+      <div class="section">
+        <h3>Where to watch${pv ? ` (${esc(pv.region)})` : ''}</h3>
+        ${hasProviders
+          ? providerRow('Streaming', pv.flatrate) + providerRow('Free', [...(pv.free || []), ...(pv.ads || [])]) + providerRow('Rent', pv.rent) + (pv.flatrate || pv.free || pv.ads || pv.rent ? '' : providerRow('Buy', pv.buy)) + `<p class="fine">Streaming availability data from JustWatch.</p>`
+          : `<p class="sub">No streaming info found for your region.</p>`}
+        <p><a href="https://www.themoviedb.org/${m.type}/${m.id}" target="_blank" rel="noopener">See more on TMDB →</a></p>
+      </div>
+      <div class="actions static">
+        ${S.kept.length >= 2 ? `<button class="btn" data-action="rematch">Redo the final rounds</button>` : ''}
+        <button class="btn primary" data-action="restart">Start over</button>
+      </div>`;
+  }
+
+  function screenLoading(msg) {
+    return `<div class="center"><div class="spinner"></div><p class="sub">${esc(msg)}</p></div>`;
+  }
+
+  // ---------- Render ----------
+  function render(opts = {}) {
+    const i = STEPS.indexOf(S.step);
+    bar.style.width = `${Math.round(((i + 1) / STEPS.length) * 100)}%`;
+    backBtn.hidden = S.step === 'type' || !!opts.loading;
+    if (opts.loading) { view.innerHTML = screenLoading(opts.loading); return; }
+    view.innerHTML = ({
+      type: screenType, genres: screenGenres, filters: screenFilters,
+      swipe: screenSwipe, duel: screenDuel, winner: screenWinner,
+    })[S.step]();
+    if (S.step === 'swipe') attachSwipe();
+  }
+
+  // ---------- Swipe gesture ----------
+  let animating = false;
+  function decide(keep) {
+    if (animating || S.step !== 'swipe' || S.idx >= S.deck.length) return;
+    const card = document.getElementById('card');
+    const m = S.deck[S.idx];
+    if (keep) S.kept.push(m); else S.passed++;
+    S.idx++;
+    if (card) {
+      animating = true;
+      card.style.transform = `translateX(${keep ? 120 : -120}%) rotate(${keep ? 14 : -14}deg)`;
+      card.style.opacity = '0';
+      setTimeout(() => { animating = false; render(); }, 220);
+    } else render();
+  }
+
+  function attachSwipe() {
+    const card = document.getElementById('card');
+    if (!card) return;
+    const keepS = document.getElementById('stampKeep');
+    const passS = document.getElementById('stampPass');
+    let startX = null, dx = 0;
+    card.addEventListener('pointerdown', (e) => { startX = e.clientX; dx = 0; card.classList.add('dragging'); card.setPointerCapture(e.pointerId); });
+    card.addEventListener('pointermove', (e) => {
+      if (startX === null) return;
+      dx = e.clientX - startX;
+      card.style.transform = `translateX(${dx}px) rotate(${dx / 18}deg)`;
+      keepS.style.opacity = Math.max(0, Math.min(1, dx / 90));
+      passS.style.opacity = Math.max(0, Math.min(1, -dx / 90));
+    });
+    const end = () => {
+      if (startX === null) return;
+      startX = null;
+      card.classList.remove('dragging');
+      if (Math.abs(dx) > 90) decide(dx > 0);
+      else { card.style.transform = ''; keepS.style.opacity = 0; passS.style.opacity = 0; }
+    };
+    card.addEventListener('pointerup', end);
+    card.addEventListener('pointercancel', end);
+  }
+
+  // ---------- Events ----------
+  view.addEventListener('click', (e) => {
+    const t = e.target.closest('button');
+    if (!t) return;
+    if (t.dataset.type) {
+      if (S.type !== t.dataset.type) { S.genres.clear(); S.length = 'any'; }
+      S.type = t.dataset.type;
+      return go('genres');
+    }
+    if (t.dataset.genre) {
+      const id = Number(t.dataset.genre);
+      S.genres.has(id) ? S.genres.delete(id) : S.genres.add(id);
+      return render();
+    }
+    if (t.dataset.set) {
+      const key = t.dataset.set;
+      S[key] = key === 'rating' ? Number(t.dataset.val) : t.dataset.val;
+      S.error = null;
+      return render();
+    }
+    if (t.dataset.next) return go(t.dataset.next);
+    if (t.dataset.pick) {
+      const d = S.duel;
+      const challenger = d.queue.shift();
+      if (t.dataset.pick === 'challenger') d.champ = challenger;
+      d.round++;
+      if (!d.queue.length) return pickWinner(d.champ);
+      return render();
+    }
+    switch (t.dataset.action) {
+      case 'deal':
+        S.pool = []; S.seen = new Set(); S.nextPage = 1; S.totalPages = 1; S.kept = []; S.passed = 0;
+        return dealDeck();
+      case 'more': return dealDeck();
+      case 'keep': return decide(true);
+      case 'pass': return decide(false);
+      case 'narrow': return startDuel();
+      case 'rematch': return startDuel();
+      case 'restart': S = fresh(); return go('type');
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (S.step !== 'swipe') return;
+    if (e.key === 'ArrowRight') decide(true);
+    if (e.key === 'ArrowLeft') decide(false);
+  });
+
+  backBtn.addEventListener('click', () => {
+    const prev = { genres: 'type', filters: 'genres', swipe: 'filters', duel: 'swipe', winner: 'filters' }[S.step];
+    if (S.step === 'duel') { S.idx = S.deck.length; } // back to the "you kept N" screen
+    if (prev) go(prev);
+  });
+  document.getElementById('brand').addEventListener('click', () => { S = fresh(); go('type'); });
+
+  render();
+})();
+</script>
+</body>
+</html>

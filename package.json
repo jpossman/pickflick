@@ -1,0 +1,10 @@
+{
+  "name": "pickflick",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Narrow thousands of movies and shows down to the one you'll actually watch tonight.",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  }
+}
