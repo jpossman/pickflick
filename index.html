@@ -6,7 +6,13 @@
 <title>PickFlick: find something to watch tonight</title>
 <meta name="description" content="Narrow thousands of movies and shows down to the one you'll actually watch tonight.">
 <meta name="theme-color" content="#0e0e12">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
+<link rel="icon" type="image/png" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PickFlick">
 <style>
   :root {
     --bg: #0e0e12;
@@ -33,7 +39,7 @@
   #app { max-width: 720px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; padding: 0 16px; }
 
   /* Header */
-  .top { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; padding: 14px 0 10px; }
+  .top { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; padding: calc(14px + env(safe-area-inset-top)) 0 10px; }
   .brand { text-align: center; font-weight: 800; font-size: 20px; letter-spacing: -0.02em; cursor: pointer; }
   .brand span { color: var(--accent); }
   .icon-btn { width: 40px; height: 40px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: 18px; display: grid; place-items: center; }
